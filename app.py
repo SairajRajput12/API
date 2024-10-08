@@ -16,7 +16,7 @@ class Plant(BaseModel):
 
 app = FastAPI()
 
-origins = ["*"]
+origins = {"*"} 
 
 app.add_middleware(
     CORSMiddleware,
@@ -66,16 +66,20 @@ def predict_image_class(model, image_url, class_indices, name_of_crop):
     print('Start prediction...')
 
     # Load and preprocess the image
-    preprocessed_img = load_and_preprocess_image(image_url, (224, 224))
+    ans = ""
+    if name_of_crop == 'pea':  
+        preprocessed_img = load_and_preprocess_image(image_url) 
+        predictions = model.predict(preprocessed_img) 
+        predicted_class_index = np.argmax(predictions, axis=1)[0]
+        ans = class_indices[predicted_class_index]
+    else: 
+        preprocessed_img = load_and_preprocess_image(image_url, (224, 224)) 
+        # Get model predictions
+        predictions = model.predict(preprocessed_img)
+        predicted_class_index = np.argmax(predictions, axis=1)[0]
+        ans = class_indices[predicted_class_index]
 
-    # Get model predictions
-    predictions = model.predict(preprocessed_img)
-
-    # Find the predicted class
-    predicted_class_index = np.argmax(predictions, axis=1)[0]
-    predicted_class_name = class_indices[predicted_class_index]
-
-    return predicted_class_name
+    return ans
 
 
 @app.get("/")
@@ -93,10 +97,10 @@ def predict(data: Plant):
 
     # Load appropriate model
     if name_of_crop == 'pea':
-        model = load_model('others.h5')
+        model = load_model('peas.h5')
         prediction = predict_image_class(model, img_url, peas, name_of_crop)
     else:
-        model = load_model('OtherCrops.h5')
+        model = load_model('others.h5')
         prediction = predict_image_class(model, img_url, others, name_of_crop)
 
     return {"prediction": prediction}
