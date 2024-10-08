@@ -3,7 +3,7 @@ pydantic
 uvicorn
 Pillow
 numpy
-tensorflow
+tensorflow>=2.7.0
 requests
 gunicorn==19.7.1
 dropbox
