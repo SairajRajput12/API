@@ -6,7 +6,5 @@ numpy
 tensorflow
 requests
 gunicorn==19.7.1
-io
-os
 dropbox
-dotenv
+python-dotenv
