@@ -93,10 +93,10 @@ def predict(data: Plant):
 
     # Load appropriate model
     if name_of_crop == 'pea':
-        model = load_model('peas.h5')
+        model = load_model('others.h5')
         prediction = predict_image_class(model, img_url, peas, name_of_crop)
     else:
-        model = load_model('others.h5')
+        model = load_model('OtherCrops.h5')
         prediction = predict_image_class(model, img_url, others, name_of_crop)
 
     return {"prediction": prediction}
