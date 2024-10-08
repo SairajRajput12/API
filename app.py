@@ -6,7 +6,10 @@ from PIL import Image
 import numpy as np
 from tensorflow.keras.models import load_model
 import requests
+import io
 from io import BytesIO
+import dropbox
+
 import os
 from dotenv import load_dotenv
 
@@ -16,8 +19,12 @@ load_dotenv()
 # Read API Key from environment variables
 DROPBOX_ACCESS_TOKEN = os.getenv('DROPBOX_ACCESS_TOKEN')
 
-# Define your model path here (from Dropbox or locally)
-MODEL_PATH = os.getenv('MODEL_PATH', 'default_model.h5')  # Default path if not found in .env
+
+
+class Plant(BaseModel):
+    img_url: str
+    name: str
+
 
 app = FastAPI()
 
@@ -80,9 +87,10 @@ peas = {
     3: 'Healthy'
 }
 
+
 def load_and_preprocess_image(image_path_or_url, target_size=(256, 256)):
     # Determine if it's a URL
-    if image_path_or_url.startswith("http"):
+    if image_path_or_url.startswith("hsttp"):
         # Download the image from the URL
         response = requests.get(image_path_or_url)
         img = Image.open(BytesIO(response.content))
@@ -90,7 +98,7 @@ def load_and_preprocess_image(image_path_or_url, target_size=(256, 256)):
         # Load image from local path
         img = Image.open(image_path_or_url)
 
-    # Resize the image
+    # Resize the imagesz
     img = img.resize(target_size)
     # Convert to numpy array
     img_array = np.array(img)
@@ -100,46 +108,61 @@ def load_and_preprocess_image(image_path_or_url, target_size=(256, 256)):
     img_array = img_array.astype('float32') / 255.
     return img_array
 
-def load_model_from_dropbox(model_path, access_token):
-    dropbox_url = f"https://content.dropboxapi.com/2/files/download"
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Dropbox-API-Arg": f"{{\"path\": \"{model_path}\"}}"
-    }
-
-    response = requests.post(dropbox_url, headers=headers)
-    
-    if response.status_code == 200:
-        print("Model downloaded successfully.")
-        model_stream = BytesIO(response.content)
-        try:
-            model = load_model(model_stream)
-        except Exception as e:
-            print(f"Error loading model: {e}")
-            return None
-        return model
-    else:
-        print(f"Failed to download the model. Status code: {response.status_code}")
-        return None
 
 def predict_image_class(model, image_url, class_indices, name_of_crop):
     print('Start prediction...')
+
+    # Load and preprocess the image
     ans = ""
-    if name_of_crop == 'pea':
-        preprocessed_img = load_and_preprocess_image(image_url)
+    if name_of_crop == 'pea':  
+        preprocessed_img = load_and_preprocess_image(image_url) 
+        predictions = model.predict(preprocessed_img) 
+        predicted_class_index = np.argmax(predictions, axis=1)[0]
+        ans = class_indices[predicted_class_index]
+    else: 
+        preprocessed_img = load_and_preprocess_image(image_url, (224, 224)) 
+        # Get model predictions
         predictions = model.predict(preprocessed_img)
         predicted_class_index = np.argmax(predictions, axis=1)[0]
         ans = class_indices[predicted_class_index]
-    else:
-        preprocessed_img = load_and_preprocess_image(image_url, (224, 224))
-        predictions = model.predict(preprocessed_img)
-        predicted_class_index = np.argmax(predictions, axis=1)[0]
-        ans = class_indices[predicted_class_index]
+
     return ans
+
+
+
+def load_model_from_dropbox(dropbox_path, access_token):
+    # Initialize Dropbox client
+    dbx = dropbox.Dropbox(access_token)
+    
+    # Ensure the Dropbox path starts with "/"
+    if not dropbox_path.startswith('/'):
+        dropbox_path = '/' + dropbox_path
+    
+    # Download the file content from Dropbox
+    metadata, res = dbx.files_download(path=dropbox_path)
+    
+    # Use a BytesIO stream to simulate a file for TensorFlow's load_model
+    model_stream = io.BytesIO(res.content)
+    
+    # Load the model directly from the BytesIO stream
+    try:
+        # Save the stream content temporarily to a file
+        with open("temp_model.h5", "wb") as f:
+            f.write(model_stream.getbuffer())
+        
+        # Load the model from the temporary file
+        model = load_model("temp_model.h5")
+        print('Model loaded successfully!')
+        return model
+    except OSError as e:
+        print(f"Error loading model: {e}")
+
+
 
 @app.get("/")
 def hello_world():
     return {"message": "This is the Plant Disease Detection System!"}
+
 
 @app.post("/predict")
 def predict(data: Plant):
@@ -149,18 +172,19 @@ def predict(data: Plant):
     if not name_of_crop:
         raise HTTPException(status_code=400, detail="Invalid crop name")
 
-    # Load appropriate model from Dropbox
-    model = load_model_from_dropbox(MODEL_PATH, DROPBOX_ACCESS_TOKEN)
     
-    if model is None:
-        raise HTTPException(status_code=500, detail="Error loading model")
 
+    # Load model from Dropbox
     if name_of_crop == 'pea':
-        prediction = predict_image_class(model, img_url, peas, name_of_crop)
+        model = load_model_from_dropbox('model.h5', DROPBOX_ACCESS_TOKEN)
     else:
-        prediction = predict_image_class(model, img_url, others, name_of_crop)
+        model = load_model_from_dropbox('plant_disease_prediction_model.h5',DROPBOX_ACCESS_TOKEN)
 
+
+    # Proceed with prediction if model is valid
+    prediction = predict_image_class(model, img_url, peas if name_of_crop == 'pea' else others, name_of_crop)
+    
     return {"prediction": prediction}
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host='127.0.0.1', port=8000)
