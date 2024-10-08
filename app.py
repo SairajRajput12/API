@@ -185,6 +185,3 @@ def predict(data: Plant):
     prediction = predict_image_class(model, img_url, peas if name_of_crop == 'pea' else others, name_of_crop)
     
     return {"prediction": prediction}
-
-if __name__ == "__main__":
-    uvicorn.run(app, host='127.0.0.1', port=8000)
