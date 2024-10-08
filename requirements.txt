@@ -5,3 +5,4 @@ Pillow
 numpy
 tensorflow
 requests
+gunicorn==19.7.1
