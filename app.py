@@ -1,42 +1,21 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-import uvicorn
-from fastapi.middleware.cors import CORSMiddleware
+from flask import Flask, request, jsonify
+from tensorflow.keras.models import load_model
 from PIL import Image
 import numpy as np
-from tensorflow.keras.models import load_model
 import requests
 import io
-from io import BytesIO
+from io import BytesIOa
 import dropbox
-
+from flask_cors import CORS
 import os
-from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
+# Initialize the Flask app
+app = Flask(__name__)
 
-# Read API Key from environment variables
-DROPBOX_ACCESS_TOKEN = os.getenv('DROPBOX_ACCESS_TOKEN')
+CORS(app)
 
+# Read API Key from environment variables or directly use the key
 
-
-class Plant(BaseModel):
-    img_url: str
-    name: str
-
-
-app = FastAPI()
-
-origins = {"*"} 
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # Class indices for crops
 others = {
@@ -86,8 +65,6 @@ peas = {
     2: 'BrownSpot',
     3: 'Healthy'
 }
-
-
 def load_and_preprocess_image(image_path_or_url, target_size=(256, 256)):
     # Determine if it's a URL
     if image_path_or_url.startswith("hsttp"):
@@ -129,62 +106,48 @@ def predict_image_class(model, image_url, class_indices, name_of_crop):
     return ans
 
 
-
-def load_model_from_dropbox(dropbox_path, access_token):
-    # Initialize Dropbox client
-    dbx = dropbox.Dropbox(access_token)
-    
-    # Ensure the Dropbox path starts with "/"
-    if not dropbox_path.startswith('/'):
-        dropbox_path = '/' + dropbox_path
-    
-    # Download the file content from Dropbox
-    metadata, res = dbx.files_download(path=dropbox_path)
-    
-    # Use a BytesIO stream to simulate a file for TensorFlow's load_model
-    model_stream = io.BytesIO(res.content)
-    
-    # Load the model directly from the BytesIO stream
+# Load the model from the local file system
+def load_model_locally(model_path):
     try:
-        # Save the stream content temporarily to a file
-        with open("temp_model.h5", "wb") as f:
-            f.write(model_stream.getbuffer())
-        
-        # Load the model from the temporary file
-        model = load_model("temp_model.h5")
+        model = load_model(model_path)
         print('Model loaded successfully!')
         return model
     except OSError as e:
         print(f"Error loading model: {e}")
+        return None
+        
+      
 
-
-
-@app.get("/")
+@app.route("/", methods=["GET"])
 def hello_world():
-    return {"message": "This is the Plant Disease Detection System!"}
-
-
-@app.post("/predict")
-def predict(data: Plant):
-    name_of_crop = data.name
-    img_url = data.img_url
-
-    if not name_of_crop:
-        raise HTTPException(status_code=400, detail="Invalid crop name")
+    return jsonify({"message": "This is the Plant Disease Detection System!"})
 
     
-
-    # Load model from Dropbox
-    if name_of_crop == 'pea':
-        model = load_model_from_dropbox('model.h5', DROPBOX_ACCESS_TOKEN)
-    else:
-        model = load_model_from_dropbox('plant_disease_prediction_model.h5',DROPBOX_ACCESS_TOKEN)
-
-
-    # Proceed with prediction if model is valid
-    prediction = predict_image_class(model, img_url, peas if name_of_crop == 'pea' else others, name_of_crop)
     
-    return {"prediction": prediction}
+@app.route("/predict", methods=["POST"])
+def predict():
+    data = request.json
+    name_of_crop = data.get("name")
+    img_url = data.get("img_url")
+
+    if not name_of_crop or not img_url:
+        return jsonify({"error": "Invalid input"}), 400
+
+    # Load model from the local file system
+    # if name_of_crop == 'pea':
+    model = load_model_locally('Peas.h5')  # Specify local path to the pea model
+    # else:
+    #     model = load_model_locally('model.h5')  # Specify local path to the other model
+
+    if not model:
+        return jsonify({"error": "Model loading failed"}), 500
+
+    # Proceed with prediction
+    prediction = predict_image_class(model, img_url, peas)
+    return jsonify({"prediction": prediction})
 
 
 
+
+if __name__ == "__main__":
+    app.run()
