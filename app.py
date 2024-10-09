@@ -133,7 +133,7 @@ def predict():
         return jsonify({"error": "Model loading failed"}), 500
 
     # Proceed with prediction
-    prediction = predict_image_class(model, img_url, peas if name_of_crop == 'pea' else others, name_of_crop)
+    prediction = predict_image_class(model, img_url, peas)
     return jsonify({"prediction": prediction})
 
 
