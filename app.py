@@ -4,7 +4,7 @@ from PIL import Image
 import numpy as np
 import requests
 import io
-from io import BytesIOa
+from io import BytesIO
 import dropbox
 from flask_cors import CORS
 import os
@@ -67,13 +67,7 @@ peas = {
 }
 def load_and_preprocess_image(image_path_or_url, target_size=(256, 256)):
     # Determine if it's a URL
-    if image_path_or_url.startswith("hsttp"):
-        # Download the image from the URL
-        response = requests.get(image_path_or_url)
-        img = Image.open(BytesIO(response.content))
-    else:
-        # Load image from local path
-        img = Image.open(image_path_or_url)
+    img = Image.open(image_path_or_url)
 
     # Resize the imagesz
     img = img.resize(target_size)
@@ -134,20 +128,16 @@ def predict():
         return jsonify({"error": "Invalid input"}), 400
 
     # Load model from the local file system
-    # if name_of_crop == 'pea':
-    model = load_model_locally('Peas.h5')  # Specify local path to the pea model
-    # else:
-    #     model = load_model_locally('model.h5')  # Specify local path to the other model
-
+    model = load_model_locally('Peas.h5')  
     if not model:
         return jsonify({"error": "Model loading failed"}), 500
 
     # Proceed with prediction
-    prediction = predict_image_class(model, img_url, peas)
+    prediction = predict_image_class(model, img_url, peas if name_of_crop == 'pea' else others, name_of_crop)
     return jsonify({"prediction": prediction})
 
 
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run()
