@@ -3,9 +3,9 @@ pydantic
 uvicorn
 Pillow
 numpy
-tensorflow>=2.7.0
+tensorflow
 requests
-gunicorn==19.7.1
+gunicorn
 dropbox
 python-dotenv
 flask 
